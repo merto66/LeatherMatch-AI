@@ -1,0 +1,34 @@
+# =============================================================
+# docker-compose.example.yml — Server deployment template
+#
+# USAGE:
+#   1. Copy this file to the server machine (e.g. C:\LeatherMatch\).
+#   2. Rename it to docker-compose.yml.
+#   3. Create an empty  data\  folder next to the compose file.
+#   4. Adjust the Leather_Images volume path to match the actual
+#      location on that machine (drive letter may differ).
+#   5. Run: docker compose up -d
+#
+# The application will be available at http://SUNUCU_IP:8080
+# =============================================================
+
+services:
+  leathermatch:
+    image: leathermatch-ai:latest
+    container_name: leathermatch-ai
+    ports:
+      # LAN access: http://SUNUCU_IP:8080
+      # Change the host port (left side) if 8080 is already in use.
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+    volumes:
+      # data/ sits next to this compose file on the host.
+      # Contains: logs.db, pattern_database.json, feedback_images/
+      - ./data:/app/data
+
+      # Reference images on an external or local disk.
+      # *** Change D:/LeatherMatchData/Leather_Images to the actual
+      #     path on THIS machine before running. ***
+      - D:/LeatherMatchData/Leather_Images:/app/Leather_Images
+    restart: unless-stopped

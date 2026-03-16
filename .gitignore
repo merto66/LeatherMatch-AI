@@ -1,0 +1,89 @@
+# ============================================================
+# Docker Compose — only docker-compose.example.yml is tracked
+# ============================================================
+docker-compose.yml
+docker-compose.local.yml
+
+# ============================================================
+# Python artifacts
+# ============================================================
+__pycache__/
+*.pyc
+*.pyo
+
+# ============================================================
+# Model — large binary, provided separately
+# ============================================================
+model/
+
+# ============================================================
+# Backend debug/build logs
+# ============================================================
+Backend/debug-*.log
+Backend/*.log
+
+# ============================================================
+# Data — large embedding DB, transient test files, feedback images
+# ============================================================
+data/pattern_database.json
+data/docker-bind-test.txt
+data/*.bak
+data/feedback_images/
+data/*.db
+data/*.db-shm
+data/*.db-wal
+
+# ============================================================
+# Leather Images — private reference images
+# ============================================================
+Leather_Images/
+
+# ============================================================
+# Frontend build artifacts
+# ============================================================
+Frontend/dist/
+Frontend/node_modules/
+
+# ============================================================
+# Backend build artifacts (Backend/.gitignore also covers target/)
+# ============================================================
+Backend/target/
+
+# ============================================================
+# Local configuration (contains credentials and machine-specific paths)
+# Use the .example files as templates.
+# ============================================================
+Backend/src/main/resources/application.properties
+Backend/src/main/resources/application-docker.properties
+
+# ============================================================
+# IDE files
+# ============================================================
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+
+# ============================================================
+# OS files
+# ============================================================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ============================================================
+# Cursor IDE configuration
+# ============================================================
+.cursor/
+
+# ============================================================
+# Developer notes (local only)
+# ============================================================
+YolHaritasi.txt
+
+# ============================================================
+# Files marked for deletion
+# ============================================================
+*-Deletable.md
+*-Deletable/

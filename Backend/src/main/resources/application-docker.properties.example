@@ -1,0 +1,43 @@
+# ============================================================
+# Spring profile: docker
+# Active when SPRING_PROFILES_ACTIVE=docker
+# All paths are relative to the container filesystem (/app/...)
+# ============================================================
+
+# ONNX Model (baked into the image)
+onnx.model.path=/app/model/leather_model.onnx
+
+# Pattern database (built by Python tooling, mounted or baked in)
+pattern.database.path=/app/data/pattern_database.json
+
+# SQLite log database (lives on the /app/data volume)
+sqlite.logs.path=/app/data/logs.db
+sqlite.admin.path=/app/data/logs.db
+
+# Shared DataSource (HikariCP)
+spring.datasource.url=jdbc:sqlite:/app/data/logs.db
+spring.datasource.driver-class-name=org.sqlite.JDBC
+spring.datasource.hikari.maximum-pool-size=4
+spring.datasource.hikari.connection-init-sql=PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000
+spring.datasource.hikari.connection-timeout=10000
+
+# Reference images (mounted via Docker volume)
+leather.images.path=/app/Leather_Images
+
+# Feedback images (lives on the /app/data volume)
+feedback.images.path=/app/data/feedback_images
+
+# Server (LAN-accessible)
+server.port=8080
+server.address=0.0.0.0
+
+# Authentication
+# IMPORTANT: Change these before deploying on a shared network.
+admin.username=admin
+admin.password=changeme123
+
+operator.username=operator
+operator.password=changeme123
+
+# Logging
+logging.level.com.example=DEBUG

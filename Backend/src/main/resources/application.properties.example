@@ -1,0 +1,76 @@
+spring.application.name=LeatherMatch-AI
+
+# ===========================================================================
+# ONNX Model
+# Adjust this path to where leather_model.onnx lives on your machine.
+# ===========================================================================
+onnx.model.path=C:/LeatherMatch/model/leather_model.onnx
+
+# ===========================================================================
+# Pattern database (JSON built by Python build_database.py)
+# ===========================================================================
+pattern.database.path=C:/LeatherMatch/data/pattern_database.json
+
+# ===========================================================================
+# Similarity matching
+# ===========================================================================
+similarity.threshold=0.70
+similarity.margin=0.03
+
+# ===========================================================================
+# File upload limits
+# ===========================================================================
+spring.servlet.multipart.max-file-size=10MB
+spring.servlet.multipart.max-request-size=10MB
+
+# ===========================================================================
+# SQLite log database (plain JDBC - no JPA/Hibernate needed)
+# ===========================================================================
+sqlite.logs.path=C:/LeatherMatch/data/logs.db
+
+# ===========================================================================
+# Shared SQLite DataSource (HikariCP)
+# ===========================================================================
+spring.datasource.url=jdbc:sqlite:C:/LeatherMatch/data/logs.db
+spring.datasource.driver-class-name=org.sqlite.JDBC
+spring.datasource.hikari.maximum-pool-size=4
+spring.datasource.hikari.connection-init-sql=PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000
+spring.datasource.hikari.connection-timeout=10000
+
+# ===========================================================================
+# Server  (0.0.0.0 makes the API reachable from other LAN devices)
+# ===========================================================================
+server.port=8080
+server.address=0.0.0.0
+
+# ===========================================================================
+# Authentication (HTTP Basic Auth)
+# IMPORTANT: Change these before deploying on a shared network.
+# ===========================================================================
+# Admin: full access to /api/admin/** and /api/match
+admin.username=admin
+admin.password=changeme123
+
+# Operator: match-only (example user for /api/match, no admin access)
+operator.username=operator
+operator.password=changeme123
+
+# ===========================================================================
+# Leather images storage root (reference images saved here by admin panel)
+# ===========================================================================
+leather.images.path=C:/LeatherMatch/Leather_Images
+
+# ===========================================================================
+# Feedback images (operator corrections pending admin review)
+# ===========================================================================
+feedback.images.path=C:/LeatherMatch/data/feedback_images
+
+# ===========================================================================
+# Admin SQLite path (shared database: match_logs + patterns + reference_images + settings)
+# ===========================================================================
+sqlite.admin.path=C:/LeatherMatch/data/logs.db
+
+# ===========================================================================
+# Logging
+# ===========================================================================
+logging.level.com.example=DEBUG
