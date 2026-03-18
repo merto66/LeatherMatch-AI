@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.io.IOException;
 
@@ -43,6 +44,18 @@ public class GlobalExceptionHandler {
         log.warn("Invalid input: {}", ex.getMessage());
         ErrorResponse body = new ErrorResponse("INVALID_INPUT", ex.getMessage(), HttpStatus.BAD_REQUEST.value());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    }
+
+    /**
+     * Handles path traversal / security violations from PathValidator.
+     * Returns 403 Forbidden so the client knows this is an access/policy error,
+     * not a generic server crash.
+     */
+    @ExceptionHandler(SecurityException.class)
+    public ResponseEntity<ErrorResponse> handleSecurityException(SecurityException ex) {
+        log.warn("Security violation: {}", ex.getMessage());
+        ErrorResponse body = new ErrorResponse("ACCESS_DENIED", ex.getMessage(), HttpStatus.FORBIDDEN.value());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(body);
     }
 
     /**
@@ -103,6 +116,17 @@ public class GlobalExceptionHandler {
                 "Server encountered an internal state problem: " + ex.getMessage(),
                 HttpStatus.INTERNAL_SERVER_ERROR.value());
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(body);
+    }
+
+    /**
+     * Handles requests for static resources that do not exist (e.g. /favicon.ico when absent).
+     * Returns 404 instead of letting the catch-all promote it to 500.
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ErrorResponse> handleNoResource(NoResourceFoundException ex) {
+        log.debug("Static resource not found: {}", ex.getMessage());
+        ErrorResponse body = new ErrorResponse("NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND.value());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
     }
 
     // -------------------------------------------------------------------------

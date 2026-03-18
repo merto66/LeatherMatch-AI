@@ -3,6 +3,7 @@ package com.example.src;
 import com.example.src.preprocessing.ImagePreprocessor;
 import com.example.src.service.EmbeddingService;
 import com.example.src.service.OnnxModelLoader;
+import com.example.src.util.PathValidator;
 
 import ai.onnxruntime.OrtEnvironment;
 import ai.onnxruntime.OrtSession;
@@ -40,7 +41,8 @@ public class TestRunner {
             
             // Step 2: Create ImagePreprocessor
             System.out.println("Step 2: Initializing ImagePreprocessor");
-            ImagePreprocessor imagePreprocessor = new ImagePreprocessor();
+            PathValidator pathValidator = new PathValidator();
+            ImagePreprocessor imagePreprocessor = new ImagePreprocessor(pathValidator);
             System.out.println("✓ ImagePreprocessor initialized\n");
             
             // Step 3: Create EmbeddingService

@@ -1,6 +1,8 @@
 package com.example.src.controller;
 
 import com.example.src.service.FeedbackDatabaseService;
+import com.example.src.util.PathValidator;
+import com.example.src.util.ImageValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -23,7 +25,6 @@ import java.util.UUID;
  */
 @RestController
 @RequestMapping("/api")
-@CrossOrigin(origins = "*")
 public class FeedbackController {
 
     private static final Logger log = LoggerFactory.getLogger(FeedbackController.class);
@@ -32,11 +33,17 @@ public class FeedbackController {
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of("jpg", "jpeg", "png");
 
     private final FeedbackDatabaseService feedbackDb;
+    private final PathValidator pathValidator;
+    private final ImageValidator imageValidator;
     private final String feedbackImagesPath;
 
     public FeedbackController(FeedbackDatabaseService feedbackDb,
+                              PathValidator pathValidator,
+                              ImageValidator imageValidator,
                               @Value("${feedback.images.path}") String feedbackImagesPath) {
         this.feedbackDb = feedbackDb;
+        this.pathValidator = pathValidator;
+        this.imageValidator = imageValidator;
         this.feedbackImagesPath = feedbackImagesPath;
     }
 
@@ -56,17 +63,17 @@ public class FeedbackController {
             @RequestParam(value = "note", required = false) String note,
             @RequestParam(value = "secondBestScore", required = false) Double secondBestScore) throws IOException {
 
-        validateFile(file);
+        imageValidator.validateImageFile(file);  // Comprehensive validation
         if (operatorSelectedPattern == null || operatorSelectedPattern.isBlank()) {
             throw new IllegalArgumentException("operatorSelectedPattern must not be blank");
         }
 
-        Path dir = Paths.get(feedbackImagesPath);
+        Path dir = pathValidator.validatePath(feedbackImagesPath);
         Files.createDirectories(dir);
 
         String ext = getExtension(file.getOriginalFilename());
         String filename = UUID.randomUUID() + "." + ext;
-        Path savedPath = dir.resolve(filename);
+        Path savedPath = pathValidator.validatePath(feedbackImagesPath, filename);
         file.transferTo(savedPath.toFile());
 
         long id = feedbackDb.insertFeedback(
@@ -86,24 +93,6 @@ public class FeedbackController {
                 "id", id,
                 "status", "PENDING",
                 "message", "Feedback submitted for admin review"));
-    }
-
-    private void validateFile(MultipartFile file) {
-        if (file == null || file.isEmpty()) {
-            throw new IllegalArgumentException(
-                    "No file provided. Send a JPG or PNG image as multipart form-data with field name 'file'.");
-        }
-        if (file.getSize() > MAX_FILE_SIZE_BYTES) {
-            throw new IllegalArgumentException(String.format(
-                    "File size %d bytes exceeds the maximum allowed size of %d bytes (10 MB).",
-                    file.getSize(), MAX_FILE_SIZE_BYTES));
-        }
-        String ext = getExtension(file.getOriginalFilename());
-        if (!ALLOWED_EXTENSIONS.contains(ext)) {
-            throw new IllegalArgumentException(String.format(
-                    "Unsupported file format '.%s'. Accepted formats: %s",
-                    ext, ALLOWED_EXTENSIONS));
-        }
     }
 
     private static String getExtension(String filename) {

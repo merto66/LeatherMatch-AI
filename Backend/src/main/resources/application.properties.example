@@ -45,15 +45,34 @@ server.address=0.0.0.0
 
 # ===========================================================================
 # Authentication (HTTP Basic Auth)
-# IMPORTANT: Change these before deploying on a shared network.
+# SECURITY: These credentials are REQUIRED and must be strong.
+# - Passwords must be at least 12 characters
+# - Common weak passwords (changeme123, operator123, etc.) are rejected
+# - Application will NOT start if credentials are missing or weak (fail-fast)
 # ===========================================================================
 # Admin: full access to /api/admin/** and /api/match
 admin.username=admin
-admin.password=changeme123
+admin.password=CHANGE_ME_TO_STRONG_PASSWORD_12_CHARS_MIN
 
 # Operator: match-only (example user for /api/match, no admin access)
 operator.username=operator
-operator.password=changeme123
+operator.password=CHANGE_ME_TO_STRONG_PASSWORD_12_CHARS_MIN
+
+# ===========================================================================
+# CORS (Cross-Origin Resource Sharing)
+# SECURITY: Specify exact allowed origins (comma-separated, no wildcards)
+# - Use http://localhost:PORT for local development
+# - Use http://IP:PORT for LAN deployment
+# - NEVER use wildcards (*) in production
+# ===========================================================================
+cors.allowed.origins=http://localhost:3000,http://localhost:5173,http://127.0.0.1:8080
+
+# ===========================================================================
+# SSL/TLS Configuration
+# SECURITY: Set to true if using HTTPS (enables HSTS header)
+# - Leave as false for HTTP-only LAN deployments
+# ===========================================================================
+server.ssl.enabled=false
 
 # ===========================================================================
 # Leather images storage root (reference images saved here by admin panel)

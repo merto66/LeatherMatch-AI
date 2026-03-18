@@ -1,5 +1,6 @@
 package com.example.src.preprocessing;
 
+import com.example.src.util.PathValidator;
 import org.springframework.stereotype.Component;
 
 import javax.imageio.ImageIO;
@@ -20,6 +21,12 @@ public class ImagePreprocessor {
     private static final int TARGET_WIDTH = 224;
     private static final int TARGET_HEIGHT = 224;
     private static final int CHANNELS = 3; // RGB
+    
+    private final PathValidator pathValidator;
+    
+    public ImagePreprocessor(PathValidator pathValidator) {
+        this.pathValidator = pathValidator;
+    }
     
     /**
      * Main preprocessing pipeline: loads, resizes, converts to RGB, normalizes, and flattens.

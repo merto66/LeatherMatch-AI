@@ -9,8 +9,10 @@ import com.example.src.service.LogService;
 import com.example.src.service.PerformanceMetricsService;
 import com.example.src.service.SettingsService;
 import com.example.src.service.SimilarityService;
+import com.example.src.util.PathValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -37,7 +39,6 @@ import java.util.*;
  */
 @RestController
 @RequestMapping("/api")
-@CrossOrigin(origins = "*")
 public class PatternMatchController {
 
     private static final Logger log = LoggerFactory.getLogger(PatternMatchController.class);
@@ -53,6 +54,8 @@ public class PatternMatchController {
     private final LogService               logService;
     private final SettingsService          settingsService;
     private final PerformanceMetricsService performanceMetricsService;
+    private final PathValidator            pathValidator;
+    private final String                   leatherImagesPath;
 
     public PatternMatchController(
             ImagePreprocessor imagePreprocessor,
@@ -62,7 +65,9 @@ public class PatternMatchController {
             SimilarityService similarityService,
             LogService logService,
             SettingsService settingsService,
-            PerformanceMetricsService performanceMetricsService) {
+            PerformanceMetricsService performanceMetricsService,
+            PathValidator pathValidator,
+            @Value("${leather.images.path}") String leatherImagesPath) {
 
         this.imagePreprocessor        = imagePreprocessor;
         this.embeddingService         = embeddingService;
@@ -72,6 +77,8 @@ public class PatternMatchController {
         this.logService               = logService;
         this.settingsService          = settingsService;
         this.performanceMetricsService = performanceMetricsService;
+        this.pathValidator            = pathValidator;
+        this.leatherImagesPath        = leatherImagesPath;
     }
 
     // =========================================================================
@@ -191,7 +198,7 @@ public class PatternMatchController {
         if (imagePathOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
-        Path imgPath = Paths.get(imagePathOpt.get());
+        Path imgPath = pathValidator.validateExistingPath(leatherImagesPath, imagePathOpt.get());
         if (!Files.exists(imgPath)) {
             return ResponseEntity.notFound().build();
         }

@@ -31,3 +31,10 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Application properties with real credentials ###
+# Runtime config files with actual passwords should not be committed
+# Templates (.example files) and placeholder configs are safe to commit
+application.properties
+!application*.properties.example
+# application-docker.properties has placeholders and environment variable fallbacks, safe to commit

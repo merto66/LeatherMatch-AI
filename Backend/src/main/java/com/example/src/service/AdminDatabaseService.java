@@ -2,6 +2,7 @@ package com.example.src.service;
 
 import com.example.src.dto.PatternDto;
 import com.example.src.dto.ReferenceImageDto;
+import com.example.src.util.PathValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -71,13 +72,16 @@ public class AdminDatabaseService {
     private final String dbPath;
     private final DataSource dataSource;
     private final String leatherImagesPath;
+    private final PathValidator pathValidator;
 
     public AdminDatabaseService(@Value("${sqlite.admin.path}") String dbPath,
                                 @Value("${leather.images.path}") String leatherImagesPath,
-                                DataSource dataSource) {
+                                DataSource dataSource,
+                                PathValidator pathValidator) {
         this.dbPath = dbPath;
         this.leatherImagesPath = leatherImagesPath;
         this.dataSource = dataSource;
+        this.pathValidator = pathValidator;
         initializeTables();
     }
 
@@ -356,13 +360,20 @@ public class AdminDatabaseService {
      */
     public Optional<String> getThumbnailImagePathForPattern(String patternCode) {
         if (patternCode == null || patternCode.isBlank()) return Optional.empty();
-        Path patternDir = Paths.get(leatherImagesPath, patternCode.trim());
-        for (String name : THUMBNAIL_CANDIDATES) {
-            Path thumbFile = patternDir.resolve(name);
-            if (Files.exists(thumbFile)) {
-                return Optional.of(thumbFile.toAbsolutePath().toString());
+        
+        try {
+            Path patternDir = pathValidator.validatePath(leatherImagesPath, patternCode.trim());
+            for (String name : THUMBNAIL_CANDIDATES) {
+                Path thumbFile = patternDir.resolve(name);
+                if (Files.exists(thumbFile)) {
+                    return Optional.of(thumbFile.toAbsolutePath().toString());
+                }
             }
+        } catch (SecurityException e) {
+            log.warn("Path validation failed for pattern code '{}': {}", patternCode, e.getMessage());
+            return Optional.empty();
         }
+        
         var patternOpt = getPatternByCode(patternCode);
         if (patternOpt.isEmpty()) return Optional.empty();
         List<ReferenceImageDto> refs = getReferencesForPattern(patternOpt.get().getId());

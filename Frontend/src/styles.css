@@ -27,7 +27,7 @@ body {
 }
 
 /* ---- Layout ---- */
-.layout { display: flex; min-height: 100vh; }
+.layout { display: flex; min-height: 100vh; min-height: 100dvh; }
 
 .sidebar {
   width: var(--sidebar-w);
@@ -37,6 +37,7 @@ body {
   flex-direction: column;
   flex-shrink: 0;
   height: 100vh;
+  height: 100dvh;
   position: sticky;
   top: 0;
   overflow-y: auto;
@@ -90,7 +91,7 @@ body {
 
 .sidebar-footer .btn-outline,
 .sidebar-logout-btn {
-  color: #cbd5e1;
+  color: #cbd5e1 !important;
   border-color: #475569;
   width: 100%;
   justify-content: center;
@@ -99,11 +100,11 @@ body {
 .sidebar-footer .btn-outline:hover:not(:disabled),
 .sidebar-logout-btn:hover:not(:disabled) {
   background: #334155;
-  color: #f1f5f9;
+  color: #f1f5f9 !important;
 }
 
 .sidebar-lang-toggle {
-  color: #94a3b8;
+  color: #94a3b8 !important;
   border-color: #334155;
   width: 100%;
   justify-content: center;
@@ -112,7 +113,7 @@ body {
 
 .sidebar-lang-toggle:hover:not(:disabled) {
   background: #334155;
-  color: #f1f5f9;
+  color: #f1f5f9 !important;
 }
 
 .main-content { flex: 1; display: flex; flex-direction: column; overflow: auto; min-width: 0; }
@@ -173,6 +174,7 @@ body {
   left: 0;
   width: 260px;
   height: 100vh;
+  height: 100dvh;
   background: #1e293b;
   color: #cbd5e1;
   z-index: 1001;
@@ -226,28 +228,29 @@ body {
 .drawer-logout {
   width: 100%;
   min-height: 44px;
-  color: #cbd5e1;
+  color: #cbd5e1 !important;
   border-color: #475569;
 }
 .drawer-logout:hover:not(:disabled) {
   background: #334155;
-  color: #f1f5f9;
+  color: #f1f5f9 !important;
 }
 .drawer-lang-toggle {
   width: 100%;
   min-height: 44px;
-  color: #94a3b8;
+  color: #94a3b8 !important;
   border-color: #334155;
   font-size: 11px;
 }
 .drawer-lang-toggle:hover:not(:disabled) {
   background: #334155;
-  color: #f1f5f9;
+  color: #f1f5f9 !important;
 }
 
 /* ---- Operator layout (match-only, no sidebar) ---- */
 .operator-layout {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
 }
@@ -341,7 +344,12 @@ body {
   padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  font-size: 14px;
+  /*
+   * iOS Safari auto-zooms when a focused input has font-size < 16px.
+   * Setting 16px here prevents that behaviour cross-browser.
+   * The visual size stays consistent because we compensate with padding.
+   */
+  font-size: 16px;
   outline: none;
   transition: border-color .15s;
 }
@@ -363,6 +371,7 @@ tr:hover td { background: var(--bg); }
   display: flex;
   align-items: center;
   gap: 10px;
+  white-space: nowrap;
 }
 .pattern-thumbnail {
   width: 48px;
@@ -370,6 +379,9 @@ tr:hover td { background: var(--bg); }
   object-fit: cover;
   border-radius: 4px;
   flex-shrink: 0;
+  /* Also applies to AuthenticatedImage's loading/error <div> wrappers */
+  min-width: 48px;
+  min-height: 48px;
 }
 .pattern-thumbnail-clickable {
   cursor: pointer;
@@ -404,6 +416,70 @@ tr:hover td { background: var(--bg); }
   padding: 0 4px;
 }
 
+/* ---- Thumbnail selection modal ---- */
+
+/*
+ * Override the generic .pattern-modal-content (which is a centered flex-column
+ * designed for the image lightbox) so the thumbnail picker uses full available
+ * width instead of shrinking to its content.
+ */
+.thumb-select-modal-content {
+  width: min(88vw, 680px);
+  align-items: stretch !important;  /* let the grid fill the full modal width */
+  max-height: 90vh;
+  background: rgba(30, 41, 59, 0.97);
+  border-radius: 10px;
+  padding: 20px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.thumb-select-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 10px;
+  overflow-y: auto;
+  max-height: calc(90vh - 80px);  /* leave room for the header row */
+  padding-right: 2px;             /* prevent scrollbar overlap */
+}
+
+.thumb-select-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-size: 22px;
+  line-height: 1;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.thumb-select-close:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.thumb-select-btn {
+  /* Button creates a containing block for position:absolute children.
+     aspect-ratio drives the height; no fixed min-height so it scales
+     correctly on every screen size. */
+  display: block;
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 8px;
+  cursor: pointer;
+  background: var(--bg-secondary, #f5f5f5);
+}
+
 /* ---- Pattern thumbnail modal (lightbox) ---- */
 .pattern-modal-backdrop {
   position: fixed;
@@ -414,8 +490,10 @@ tr:hover td { background: var(--bg); }
   justify-content: center;
   z-index: 2000;
   padding: 24px;
+  touch-action: none;
   cursor: pointer;
 }
+
 .pattern-modal-content {
   position: relative;
   max-width: 90vw;
@@ -429,8 +507,8 @@ tr:hover td { background: var(--bg); }
   position: absolute;
   top: -40px;
   right: 0;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border: none;
   background: rgba(255, 255, 255, 0.2);
   color: #fff;
@@ -442,6 +520,7 @@ tr:hover td { background: var(--bg); }
   align-items: center;
   justify-content: center;
   transition: background 0.15s;
+  -webkit-tap-highlight-color: transparent;
 }
 .pattern-modal-close:hover {
   background: rgba(255, 255, 255, 0.35);
@@ -456,6 +535,7 @@ tr:hover td { background: var(--bg); }
   align-items: center;
   justify-content: center;
   user-select: none;
+  touch-action: none;
 }
 .pattern-modal-image-wrap--drag {
   cursor: grab;
@@ -466,12 +546,15 @@ tr:hover td { background: var(--bg); }
 .pattern-modal-image {
   max-width: 85vw;
   max-height: 75vh;
+  width: auto;
   height: auto;
   object-fit: contain;
   border-radius: 8px;
   display: block;
   transform-origin: center center;
   transition: transform 0.15s ease;
+  -webkit-user-drag: none;
+  pointer-events: none;
 }
 .pattern-modal-caption {
   margin-top: 12px;
@@ -526,6 +609,7 @@ tr:hover td { background: var(--bg); }
 /* ---- Forbidden (403) ---- */
 .forbidden-page {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -545,6 +629,7 @@ tr:hover td { background: var(--bg); }
 /* ---- Login ---- */
 .login-page {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -631,11 +716,36 @@ tr:hover td { background: var(--bg); }
     font-size: 9px;
   }
   .pattern-modal-backdrop {
-    padding: 16px;
+    padding: 12px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+  .pattern-modal-content {
+    max-width: 96vw;
+    max-height: 92vh;
+  }
+  .pattern-modal-image-wrap {
+    max-width: 96vw;
+    max-height: 72vh;
+  }
+  .pattern-modal-image {
+    max-width: 96vw;
+    max-height: 72vh;
   }
   .pattern-modal-close {
     width: 44px;
     height: 44px;
     font-size: 28px;
+    top: -48px;
+  }
+
+  .thumb-select-modal-content {
+    width: 96vw;
+    padding: 14px;
+    max-height: 92vh;
+  }
+  .thumb-select-grid {
+    grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+    gap: 8px;
+    max-height: calc(92vh - 70px);
   }
 }

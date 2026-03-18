@@ -90,6 +90,17 @@ graph LR
   - picks the best match using **max similarity per pattern**,
   - applies a threshold (default: `0.70`, adjustable at runtime) to decide MATCH vs UNCERTAIN.
 
+## Quick Checklist — Operator + Developer
+- Purpose: offline-first leather pattern matching via embedding + cosine similarity (no classification).
+- Roles: `operator` uses `/match` + submit feedback; `admin` manages `/admin/**` (patterns, feedback, logs, settings).
+- Quick start:
+  - Dev: run backend (Spring Boot) + frontend (Vite).
+  - LAN/Prod: run `docker compose up -d` and access `http://HOST_IP:8080`.
+- Security: HTTP Basic Auth is enabled; use strong credentials configured in `docker-compose.yml` (fail-fast password rules).
+- Matching decision summary: `threshold` and `margin` are used to separate `MATCH` vs `UNCERTAIN`.
+- Critical admin flows: manage patterns, upload/import reference images + choose thumbnail, review feedback queue, adjust similarity settings at runtime.
+- Control point: verify the service with `GET /api/health`.
+
 ## Repository layout
 
 ```
@@ -97,7 +108,7 @@ LeatherMatch-AI/
 ├─ Backend/                         # Java Spring Boot backend (runtime)
 │  └─ src/main/java/com/example/src/
 │     ├─ config/                    # SecurityConfig (HTTP Basic Auth)
-│     ├─ controller/                # PatternMatchController + AdminController
+│     ├─ controller/                # PatternMatchController + AdminController + SpaController (SPA forward)
 │     ├─ dto/                       # MatchResult, ErrorResponse, PatternDto, ReferenceImageDto, SettingsDto
 │     ├─ exception/                 # GlobalExceptionHandler
 │     ├─ preprocessing/             # Image preprocessing (224x224, NCHW)
@@ -202,6 +213,8 @@ npm run build
 
 After rebuilding and restarting Spring Boot, the UI is served at `http://HOST_IP:8080`.
 
+> **Note:** Files in `Frontend/public/` (e.g. `login-bg.png`) are copied by Vite into `dist/` and then into `static/` during the Docker build. They are served without authentication. All SPA routes (`/login`, `/match`, `/admin/**`) are forwarded to `index.html` by `SpaController` — no Basic-Auth popup on page refresh.
+
 ---
 
 ## Docker setup (LAN)
@@ -238,7 +251,37 @@ This runs a three-stage build:
 
 2. Copy `docker-compose.example.yml` to this folder and rename it to `docker-compose.yml`.
 
-3. Edit the `Leather_Images` volume line in `docker-compose.yml` to point to the actual location on your server:
+3. **SECURITY: Configure credentials and CORS** in `docker-compose.yml`:
+
+   **CRITICAL:** The application will NOT start with weak or missing passwords (fail-fast security).
+   
+   Edit the `environment` section:
+   
+   ```yaml
+   environment:
+     - SPRING_PROFILES_ACTIVE=docker
+     
+     # Replace with strong passwords (minimum 12 characters)
+     - ADMIN_PASSWORD=YourVeryStrongPassword123!@#
+     - OPERATOR_PASSWORD=AnotherStrongPassword456$%^
+     
+     # Replace SERVER_IP with your actual LAN IP (e.g., 192.168.1.100)
+     - CORS_ALLOWED_ORIGINS=http://192.168.1.100:8080
+     
+     # Set to true only if using HTTPS
+     - SSL_ENABLED=false
+   ```
+   
+   **Password Requirements:**
+   - Minimum 12 characters
+   - Cannot be weak passwords like: `changeme123`, `operator123`, `password123`, etc.
+   - Application will abort startup if passwords are weak
+   
+   **CORS Configuration:**
+   - Replace `SERVER_IP` with the actual IP address of the server on your LAN
+   - For multiple frontend origins, use comma-separated list: `http://IP1:PORT1,http://IP2:PORT2`
+
+4. Edit the `Leather_Images` volume line in `docker-compose.yml` to point to the actual location on your server:
 
    ```yaml
    # External drive example:
@@ -247,7 +290,7 @@ This runs a three-stage build:
    - C:/LeatherMatchData/Leather_Images:/app/Leather_Images
    ```
 
-4. Transfer the `leathermatch-ai:latest` image built on the development machine to the server:
+5. Transfer the `leathermatch-ai:latest` image built on the development machine to the server:
 
    ```powershell
    # On development machine — save image to file:
@@ -312,7 +355,7 @@ Verification:
 curl http://localhost:8080/api/health
 
 # Admin panel in browser:
-# http://localhost:8080  →  admin / changeme123
+# http://localhost:8080  →  login with your configured admin credentials
 ```
 
 To stop:
@@ -329,13 +372,17 @@ docker compose -f docker-compose.local.yml down
 
 | URL | Description |
 |-----|-------------|
-| `http://HOST_IP:8080/login` | Sign in (`admin`/`changeme123` or `operator`/`changeme123`) |
+| `http://HOST_IP:8080/login` | Sign in with credentials configured in `docker-compose.yml` (see Security Configuration) |
 | `/match` | Upload a leather image → get best pattern match |
 | `/admin/feedback` | Review Queue — operator corrections (approve/reject/add as reference) |
 | `/admin/patterns` | List all patterns, add new, delete |
 | `/admin/patterns/:id` | Upload / import reference images, preview thumbnails, choose thumbnail via "Thumbnail yap" |
 | `/admin/logs` | Paginated match log with pattern and result filters |
 | `/admin/settings` | Change similarity threshold at runtime (no restart needed) |
+
+**Browser refresh / deep links:** All SPA routes (`/login`, `/match`, `/admin/**`) are handled by `SpaController` on the backend, which forwards them to `index.html`. This means pressing F5 or navigating directly to any of these URLs never triggers a browser Basic-Auth dialog or a 500 error — React Router takes over on the client side.
+
+**Security Note:** Default credentials (`admin`/`changeme123`, `operator`/`changeme123`) are rejected at startup. You must configure strong passwords in `docker-compose.yml` (see deployment instructions above).
 
 Credentials are set in `Backend/src/main/resources/application.properties` (not tracked by git — copy from `application.properties.example` and set your own values):
 

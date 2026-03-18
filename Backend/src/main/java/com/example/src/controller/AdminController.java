@@ -11,6 +11,8 @@ import com.example.src.service.FeedbackDatabaseService;
 import com.example.src.service.LogService;
 import com.example.src.service.SettingsService;
 import com.example.src.service.SimilarityService;
+import com.example.src.util.PathValidator;
+import com.example.src.util.ImageValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -52,7 +54,6 @@ import java.util.*;
  */
 @RestController
 @RequestMapping("/api/admin")
-@CrossOrigin(origins = "*")
 public class AdminController {
 
     private static final Logger log = LoggerFactory.getLogger(AdminController.class);
@@ -68,7 +69,10 @@ public class AdminController {
     private final EmbeddingService       embeddingService;
     private final SimilarityService      similarityService;
     private final LogService             logService;
+    private final PathValidator          pathValidator;
+    private final ImageValidator         imageValidator;
     private final String                 leatherImagesPath;
+    private final String                 feedbackImagesPath;
 
     public AdminController(
             AdminDatabaseService adminDb,
@@ -79,7 +83,10 @@ public class AdminController {
             EmbeddingService embeddingService,
             SimilarityService similarityService,
             LogService logService,
-            @Value("${leather.images.path}") String leatherImagesPath) {
+            PathValidator pathValidator,
+            ImageValidator imageValidator,
+            @Value("${leather.images.path}") String leatherImagesPath,
+            @Value("${feedback.images.path}") String feedbackImagesPath) {
 
         this.adminDb           = adminDb;
         this.databaseService   = databaseService;
@@ -89,7 +96,10 @@ public class AdminController {
         this.embeddingService  = embeddingService;
         this.similarityService = similarityService;
         this.logService        = logService;
+        this.pathValidator     = pathValidator;
+        this.imageValidator    = imageValidator;
         this.leatherImagesPath = leatherImagesPath;
+        this.feedbackImagesPath = feedbackImagesPath;
     }
 
     // =========================================================================
@@ -143,9 +153,11 @@ public class AdminController {
         int deletedFiles = 0;
         for (String p : imagePaths) {
             try {
-                Files.deleteIfExists(Paths.get(p));
+                // Validate path before deletion
+                Path validatedPath = pathValidator.validateExistingPath(leatherImagesPath, p);
+                Files.deleteIfExists(validatedPath);
                 deletedFiles++;
-            } catch (IOException e) {
+            } catch (IOException | SecurityException e) {
                 log.warn("Could not delete image file '{}': {}", p, e.getMessage());
             }
         }
@@ -190,13 +202,23 @@ public class AdminController {
         ReferenceImageDto selected = refs.stream().filter(r -> r.getId() == referenceId).findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Reference " + referenceId + " does not belong to this pattern"));
         adminDb.setThumbnailReference(patternId, referenceId);
-        // File-based thumbnail: copy selected image to _thumbnail.<ext> (Match screen reads this)
-        Path patternDir = Paths.get(leatherImagesPath, opt.get().getCode());
-        String ext = getExtension(Paths.get(selected.getImagePath()).getFileName().toString());
-        Path thumbFile = patternDir.resolve("_thumbnail." + ext);
-        Files.createDirectories(patternDir);
-        Files.copy(Paths.get(selected.getImagePath()), thumbFile, StandardCopyOption.REPLACE_EXISTING);
-        log.info("Admin: set thumbnail for pattern {} to reference {} (copied to _thumbnail.jpg)", patternId, referenceId);
+        // File-based thumbnail: copy selected image to _thumbnail.<ext> (Match screen reads this).
+        // The file copy is best-effort: the DB record is already updated above.
+        // If the copy fails (path validation, missing file, IO) we log a warning
+        // but still return success so the UI is not blocked.
+        try {
+            Path patternDir = pathValidator.validatePath(leatherImagesPath, opt.get().getCode());
+            String ext = getExtension(Paths.get(selected.getImagePath()).getFileName().toString());
+            Path thumbFile = patternDir.resolve("_thumbnail." + ext);
+            Files.createDirectories(patternDir);
+            Path sourcePath = pathValidator.validateExistingPath(leatherImagesPath, selected.getImagePath());
+            Files.copy(sourcePath, thumbFile, StandardCopyOption.REPLACE_EXISTING);
+            log.info("Admin: set thumbnail for pattern {} to reference {} (file copied to {})",
+                    patternId, referenceId, thumbFile.getFileName());
+        } catch (SecurityException | IOException e) {
+            log.warn("Admin: thumbnail DB record updated for pattern {} ref {} but file copy failed: {}",
+                    patternId, referenceId, e.getMessage());
+        }
         return ResponseEntity.ok(Map.of("thumbnailReferenceId", referenceId));
     }
 
@@ -220,7 +242,7 @@ public class AdminController {
         }
         PatternDto pattern = opt.get();
 
-        Path patternDir = Paths.get(leatherImagesPath, pattern.getCode());
+        Path patternDir = pathValidator.validatePath(leatherImagesPath, pattern.getCode());
         if (!Files.exists(patternDir) || !Files.isDirectory(patternDir)) {
             Map<String, Object> resp = new LinkedHashMap<>();
             resp.put("imported", 0);
@@ -318,14 +340,14 @@ public class AdminController {
         List<ReferenceImageDto> results = new ArrayList<>();
 
         for (MultipartFile file : files) {
-            validateFile(file);
+            imageValidator.validateImageFile(file);  // Comprehensive validation
             String ext = getExtension(file.getOriginalFilename());
 
             // --- Save file to disk ---
             String filename = UUID.randomUUID() + "." + ext;
-            Path patternDir = Paths.get(leatherImagesPath, pattern.getCode());
+            Path patternDir = pathValidator.validatePath(leatherImagesPath, pattern.getCode());
             Files.createDirectories(patternDir);
-            Path savedPath = patternDir.resolve(filename);
+            Path savedPath = pathValidator.validatePath(leatherImagesPath, pattern.getCode(), filename);
             file.transferTo(savedPath.toFile());
 
             // --- Preprocess → embed → normalize ---
@@ -368,8 +390,9 @@ public class AdminController {
         // Best-effort delete the file from disk
         boolean fileDeleted = false;
         try {
-            fileDeleted = Files.deleteIfExists(Paths.get(imagePath.get()));
-        } catch (IOException e) {
+            Path validatedPath = pathValidator.validateExistingPath(leatherImagesPath, imagePath.get());
+            fileDeleted = Files.deleteIfExists(validatedPath);
+        } catch (IOException | SecurityException e) {
             log.warn("Could not delete image file '{}': {}", imagePath.get(), e.getMessage());
         }
 
@@ -397,7 +420,7 @@ public class AdminController {
         if (pathOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
-        Path imgPath = Paths.get(pathOpt.get());
+        Path imgPath = pathValidator.validateExistingPath(leatherImagesPath, pathOpt.get());
         if (!Files.exists(imgPath)) {
             return ResponseEntity.notFound().build();
         }
@@ -517,7 +540,7 @@ public class AdminController {
         if (pathOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
-        Path imgPath = Paths.get(pathOpt.get());
+        Path imgPath = pathValidator.validateExistingPath(feedbackImagesPath, pathOpt.get());
         if (!Files.exists(imgPath)) {
             return ResponseEntity.notFound().build();
         }
@@ -591,16 +614,16 @@ public class AdminController {
         if (imagePathOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
-        Path sourcePath = Paths.get(imagePathOpt.get());
+        Path sourcePath = pathValidator.validateExistingPath(feedbackImagesPath, imagePathOpt.get());
         if (!Files.exists(sourcePath)) {
             return ResponseEntity.notFound().build();
         }
 
         String ext = getExtension(sourcePath.getFileName().toString());
         String filename = UUID.randomUUID() + "." + ext;
-        Path patternDir = Paths.get(leatherImagesPath, pattern.getCode());
+        Path patternDir = pathValidator.validatePath(leatherImagesPath, pattern.getCode());
         Files.createDirectories(patternDir);
-        Path destPath = patternDir.resolve(filename);
+        Path destPath = pathValidator.validatePath(leatherImagesPath, pattern.getCode(), filename);
         Files.copy(sourcePath, destPath, StandardCopyOption.REPLACE_EXISTING);
 
         float[] preprocessed = imagePreprocessor.preprocessImage(destPath.toString());
@@ -627,22 +650,6 @@ public class AdminController {
     // =========================================================================
     // Private helpers
     // =========================================================================
-
-    private void validateFile(MultipartFile file) {
-        if (file == null || file.isEmpty()) {
-            throw new IllegalArgumentException("File is empty or missing");
-        }
-        if (file.getSize() > MAX_FILE_SIZE_BYTES) {
-            throw new IllegalArgumentException(String.format(
-                    "File '%s' exceeds 10 MB limit", file.getOriginalFilename()));
-        }
-        String ext = getExtension(file.getOriginalFilename());
-        if (!ALLOWED_EXTENSIONS.contains(ext)) {
-            throw new IllegalArgumentException(String.format(
-                    "Unsupported format '.%s' for file '%s'. Accepted: jpg, jpeg, png",
-                    ext, file.getOriginalFilename()));
-        }
-    }
 
     private static String getExtension(String filename) {
         if (filename == null || filename.isBlank()) return "jpg";

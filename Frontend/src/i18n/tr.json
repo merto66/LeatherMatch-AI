@@ -115,6 +115,8 @@
     "importErrors": " {{count}} hata: ",
     "thumbnailSet": "Küçük resim #{{id}} olarak ayarlandı",
     "failedToSetThumbnail": "Küçük resim ayarlanamadı",
+    "sessionExpired": "Oturum süresi doldu – lütfen çıkış yapıp tekrar giriş yapın.",
+    "accessDenied": "Erişim reddedildi – yönetici yetkisi gereklidir.",
     "selectThumbnail": "Küçük resim olarak kullanılacak fotoğrafı seçin",
     "confirmDeleteRef": "Referans görüntü #{{id}} silinsin mi?",
     "scanConfirm": "Leather_Images/{{code}}/ klasörü taranacak ve henüz kayıtlı olmayan tüm görüntü dosyaları içe aktarılacak.\n\nBu işlem biraz zaman alabilir (her görüntü için ONNX çıkarımı).",

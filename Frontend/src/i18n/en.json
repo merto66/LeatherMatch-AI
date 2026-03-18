@@ -115,6 +115,8 @@
     "importErrors": " {{count}} error(s): ",
     "thumbnailSet": "Thumbnail set to #{{id}}",
     "failedToSetThumbnail": "Failed to set thumbnail",
+    "sessionExpired": "Session expired – please log out and log in again.",
+    "accessDenied": "Access denied – admin role required.",
     "selectThumbnail": "Select photo to use as thumbnail",
     "confirmDeleteRef": "Delete reference image #{{id}}?",
     "scanConfirm": "Scan Leather_Images/{{code}}/ on the server and import all image files that are not yet registered?\n\nThis may take a while (ONNX inference per image).",

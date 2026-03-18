@@ -16,7 +16,9 @@ const STORAGE_KEY = 'leathermatch_auth'
 const ROLE_KEY = 'leathermatch_role'
 
 export function setCredentials(username: string, password: string): void {
-  const encoded = btoa(`${username}:${password}`)
+  // btoa() only handles ASCII (Latin1). For non-ASCII characters in username
+  // or password, encodeURIComponent + unescape gives correct Latin1 bytes.
+  const encoded = btoa(unescape(encodeURIComponent(`${username}:${password}`)))
   sessionStorage.setItem(STORAGE_KEY, encoded)
 }
 
@@ -199,15 +201,38 @@ export const getPatterns = () =>
 
 /** Returns the URL path for the pattern thumbnail endpoint (used with fetch + auth). */
 export function getPatternThumbnailUrl(code: string): string {
-  return `/patterns/${encodeURIComponent(code)}/thumbnail`
+  return `/api/patterns/${encodeURIComponent(code)}/thumbnail`
 }
 
-/** Cache-busting param to avoid stale thumbnail after admin sets a new one. */
-const thumbnailCacheBust = () => `_t=${Date.now()}`
+/**
+ * Per-pattern cache-bust version counter.
+ * Incremented only when the admin explicitly sets a new thumbnail
+ * (via invalidatePatternThumbnail).  This gives a stable URL for HTTP
+ * caching while still allowing manual invalidation.
+ */
+const thumbnailVersions = new Map<string, number>()
+
+/** Returns a stable URL for the pattern thumbnail, with a version param
+ *  that only changes after invalidatePatternThumbnail() is called. */
+export function getPatternThumbnailCacheUrl(code: string): string {
+  const v = thumbnailVersions.get(code) ?? 0
+  return getPatternThumbnailUrl(code) + (v > 0 ? `?v=${v}` : '')
+}
+
+/**
+ * Invalidate the cached thumbnail for a specific pattern.
+ * Call this after the admin sets a new thumbnail so the next request
+ * fetches the updated image.  Does NOT revoke any existing blob URLs —
+ * callers should call imageCache.invalidate() with the old URL first.
+ */
+export function invalidatePatternThumbnail(code: string): void {
+  const current = thumbnailVersions.get(code) ?? 0
+  thumbnailVersions.set(code, current + 1)
+}
 
 /** Fetches thumbnail as blob; returns object URL or null on 404/error. */
 export async function fetchPatternThumbnail(code: string): Promise<string | null> {
-  const url = getPatternThumbnailUrl(code) + '?' + thumbnailCacheBust()
+  const url = getPatternThumbnailCacheUrl(code)
   try {
     const res = await apiClient.get(url, { responseType: 'blob' })
     return URL.createObjectURL(res.data as Blob)

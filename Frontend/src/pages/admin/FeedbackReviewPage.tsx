@@ -7,13 +7,14 @@ import {
   getFeedbackList,
   rejectFeedback,
 } from '../../api/client'
+import LazyAuthenticatedImage from '../../components/LazyAuthenticatedImage'
 
 export default function FeedbackReviewPage() {
   const [items, setItems] = useState<FeedbackEntry[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [status, setStatus] = useState('PENDING')
-  const [limit] = useState(50)
+  const [limit] = useState(20)
   const [offset, setOffset] = useState(0)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -136,7 +137,7 @@ export default function FeedbackReviewPage() {
             {items.map(fb => (
               <div key={fb.id} className="card feedback-card">
                 <div>
-                  <img
+                  <LazyAuthenticatedImage
                     src={`/api/admin/feedback/${fb.id}/image`}
                     alt="feedback"
                     style={{
@@ -145,9 +146,6 @@ export default function FeedbackReviewPage() {
                       objectFit: 'cover',
                       borderRadius: 6,
                       border: '1px solid var(--border)',
-                    }}
-                    onError={e => {
-                      (e.target as HTMLImageElement).style.display = 'none'
                     }}
                   />
                 </div>

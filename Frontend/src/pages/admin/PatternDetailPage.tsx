@@ -4,14 +4,20 @@ import { useTranslation } from 'react-i18next'
 import {
   deleteReference,
   getAdminPatterns,
+  getPatternThumbnailCacheUrl,
   getReferences,
+  hasCredentials,
   importFromDisk,
+  invalidatePatternThumbnail,
   PatternDto,
   ReferenceImageDto,
   setThumbnailReference,
   uploadReferences,
 } from '../../api/client'
+import { invalidate as invalidateImageCache } from '../../utils/imageCache'
 import ZoomableImage from '../../components/ZoomableImage'
+import LazyAuthenticatedImage from '../../components/LazyAuthenticatedImage'
+import AuthenticatedImage from '../../components/AuthenticatedImage'
 
 export default function PatternDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -54,6 +60,7 @@ export default function PatternDetailPage() {
 
   async function handleUpload(files: FileList | null) {
     if (!files || files.length === 0) return
+    if (!hasCredentials()) { setError(t('login.invalidCredentials')); return }
     const fileArr = Array.from(files)
     setUploading(true)
     setError('')
@@ -84,6 +91,7 @@ export default function PatternDetailPage() {
 
   async function handleImportFromDisk() {
     if (!pattern) return
+    if (!hasCredentials()) { setError(t('login.invalidCredentials')); return }
     if (!confirm(t('patternDetail.scanConfirm', { code: pattern.code }))) return
 
     setImporting(true)
@@ -120,17 +128,48 @@ export default function PatternDetailPage() {
   }
 
   async function handleSetThumbnail(ref: ReferenceImageDto) {
+    if (!hasCredentials()) {
+      setError(t('login.invalidCredentials'))
+      return
+    }
     setError('')
     setSuccess('')
     setSettingThumbnail(true)
     try {
       await setThumbnailReference(patternId, ref.id)
+      // Invalidate the cached thumbnail so the next fetch gets the new image.
+      if (pattern) {
+        const oldUrl = getPatternThumbnailCacheUrl(pattern.code)
+        invalidatePatternThumbnail(pattern.code)
+        invalidateImageCache(oldUrl)
+      }
       setSuccess(t('patternDetail.thumbnailSet', { id: ref.id }))
       setThumbnailSelectOpen(false)
       setPattern((prev) => (prev ? { ...prev, thumbnailReferenceId: ref.id } : null))
     } catch (err: unknown) {
-      const ax = err as { response?: { data?: { message?: string }; status?: number }; message?: string }
-      const msg = ax?.response?.data?.message ?? (ax?.response?.status === 404 ? t('patternDetail.patternNotFound') : ax?.message ?? t('patternDetail.failedToSetThumbnail'))
+      const ax = err as { response?: { data?: { message?: string; error?: string }; status?: number }; message?: string }
+      const status = ax?.response?.status
+      const serverMsg = ax?.response?.data?.message ?? ax?.response?.data?.error
+      let msg: string
+      if (status === 401) {
+        msg = t('patternDetail.sessionExpired') || 'Session expired – please log out and log in again.'
+      } else if (status === 403) {
+        msg = serverMsg
+          ? `${t('patternDetail.accessDenied')} — ${serverMsg}`
+          : (t('patternDetail.accessDenied') || 'Access denied – admin role required.')
+      } else if (status === 404) {
+        msg = t('patternDetail.patternNotFound')
+      } else if (status) {
+        // Show status code + server message for all other errors (500, 422, etc.)
+        msg = serverMsg
+          ? `[HTTP ${status}] ${serverMsg}`
+          : (ax?.message ?? t('patternDetail.failedToSetThumbnail'))
+      } else {
+        // Network error (no response): likely CORS or server down
+        msg = ax?.message
+          ? `${t('patternDetail.failedToSetThumbnail')}: ${ax.message}`
+          : t('patternDetail.failedToSetThumbnail')
+      }
       setError(msg)
     } finally {
       setSettingThumbnail(false)
@@ -277,7 +316,7 @@ export default function PatternDetailPage() {
             </div>
           ) : (
             <>
-              {/* Visual grid of thumbnails */}
+              {/* Visual grid of thumbnails – lazy-loaded via IntersectionObserver */}
               <div style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
@@ -285,48 +324,13 @@ export default function PatternDetailPage() {
                 marginBottom: 20,
               }}>
                 {refs.map(r => (
-                  <div key={r.id} style={{ position: 'relative', textAlign: 'center' }}>
-                    <div style={{
-                      width: '100%',
-                      aspectRatio: '1',
-                      borderRadius: 6,
-                      border: thumbnailRefId === r.id ? '2px solid var(--primary)' : '1px solid var(--border)',
-                      overflow: 'hidden',
-                      position: 'relative',
-                    }}>
-                      <ZoomableImage
-                        src={`/api/admin/references/${r.id}/image`}
-                        alt={r.imagePath.split(/[\\/]/).pop() ?? `#${r.id}`}
-                        caption={`#${r.id}`}
-                        thumbnailClassName="ref-photo-thumbnail"
-                        thumbnailStyle={refThumbStyle}
-                      />
-                    </div>
-                    <button
-                      onClick={() => handleDelete(r)}
-                      title="Delete"
-                      style={{
-                        position: 'absolute',
-                        top: 4,
-                        right: 4,
-                        background: 'rgba(220,38,38,0.85)',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: 4,
-                        width: 22,
-                        height: 22,
-                        cursor: 'pointer',
-                        fontSize: 13,
-                        lineHeight: '22px',
-                        padding: 0,
-                      }}
-                    >
-                      ×
-                    </button>
-                    <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      #{r.id}
-                    </div>
-                  </div>
+                  <LazyRefCell
+                    key={r.id}
+                    r={r}
+                    isThumbnail={thumbnailRefId === r.id}
+                    refThumbStyle={refThumbStyle}
+                    onDelete={handleDelete}
+                  />
                 ))}
               </div>
 
@@ -338,58 +342,66 @@ export default function PatternDetailPage() {
                   style={{ zIndex: 2001 }}
                 >
                   <div
-                    className="pattern-modal-content"
+                    className="pattern-modal-content thumb-select-modal-content"
                     onClick={(e) => e.stopPropagation()}
-                    style={{ maxWidth: '90vw', width: 'auto' }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                      <p style={{ fontWeight: 600, margin: 0, color: '#fff' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexShrink: 0 }}>
+                      <p style={{ fontWeight: 600, margin: 0, color: '#fff', fontSize: 15 }}>
                         {t('patternDetail.selectThumbnail')}
                       </p>
                       <button
                         type="button"
-                        className="pattern-modal-close"
+                        className="thumb-select-close"
                         onClick={() => setThumbnailSelectOpen(false)}
                         aria-label="Close"
                       >
                         ×
                       </button>
                     </div>
-                    <div style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))',
-                      gap: 12,
-                      maxHeight: '70vh',
-                      overflowY: 'auto',
-                    }}>
+                    <div
+                      className="thumb-select-grid"
+                    >
                       {refs.map(r => (
                         <button
                           key={r.id}
                           type="button"
+                          className="thumb-select-btn"
                           onClick={() => handleSetThumbnail(r)}
                           disabled={settingThumbnail}
                           style={{
-                            padding: 0,
-                            border: thumbnailRefId === r.id ? '3px solid var(--primary)' : '2px solid var(--border)',
-                            borderRadius: 8,
-                            background: 'transparent',
-                            cursor: 'pointer',
-                            overflow: 'hidden',
-                            aspectRatio: '1',
+                            border: thumbnailRefId === r.id
+                              ? '3px solid var(--primary)'
+                              : '2px solid var(--border)',
                           }}
                         >
-                          <img
+                          {/* Fills the entire button area */}
+                          <AuthenticatedImage
                             src={`/api/admin/references/${r.id}/image`}
                             alt={`#${r.id}`}
                             style={{
+                              position: 'absolute',
+                              inset: 0,
                               width: '100%',
                               height: '100%',
                               objectFit: 'cover',
                               display: 'block',
                             }}
                           />
-                          <div style={{ fontSize: 10, color: '#fff', padding: 4, background: 'rgba(0,0,0,0.5)' }}>
-                            #{r.id} {thumbnailRefId === r.id ? '✓' : ''}
+                          {/* Caption overlay pinned to bottom */}
+                          <div style={{
+                            position: 'absolute',
+                            bottom: 0,
+                            left: 0,
+                            right: 0,
+                            fontSize: 10,
+                            color: '#fff',
+                            padding: '2px 4px',
+                            background: 'rgba(0,0,0,0.55)',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}>
+                            #{r.id}{thumbnailRefId === r.id ? ' ✓' : ''}
                           </div>
                         </button>
                       ))}
@@ -442,5 +454,104 @@ export default function PatternDetailPage() {
         </div>
       </div>
     </>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// LazyRefCell – renders a single reference image cell in the grid.
+// It uses IntersectionObserver so the ZoomableImage (and its AuthenticatedImage
+// inside) is only mounted – and therefore only fetches – once it enters the
+// viewport.  This prevents dozens of simultaneous requests on page load.
+// ---------------------------------------------------------------------------
+
+interface LazyRefCellProps {
+  r: ReferenceImageDto
+  isThumbnail: boolean
+  refThumbStyle: React.CSSProperties
+  onDelete: (r: ReferenceImageDto) => void
+}
+
+function LazyRefCell({ r, isThumbnail, refThumbStyle, onDelete }: LazyRefCellProps) {
+  const [visible, setVisible] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+
+    // Check synchronously first – if already in viewport, mark visible immediately
+    // so elements that are painted on first render don't wait for an IO callback.
+    const rect = el.getBoundingClientRect()
+    const expandedTop = -300
+    const expandedBottom = window.innerHeight + 300
+    if (rect.top < expandedBottom && rect.bottom > expandedTop) {
+      setVisible(true)
+      return
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setVisible(true)
+          observer.disconnect()
+        }
+      },
+      // root: null targets the viewport. rootMargin expands the trigger zone.
+      { rootMargin: '300px', threshold: 0 },
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+
+  return (
+    <div style={{ position: 'relative', textAlign: 'center' }}>
+      <div
+        ref={containerRef}
+        style={{
+          width: '100%',
+          aspectRatio: '1',
+          borderRadius: 6,
+          border: isThumbnail ? '2px solid var(--primary)' : '1px solid var(--border)',
+          overflow: 'hidden',
+          position: 'relative',
+          background: 'var(--bg-secondary, #f5f5f5)',
+        }}
+      >
+        {visible && (
+          <ZoomableImage
+            src={`/api/admin/references/${r.id}/image`}
+            alt={r.imagePath.split(/[\\/]/).pop() ?? `#${r.id}`}
+            caption={`#${r.id}`}
+            thumbnailClassName="ref-photo-thumbnail"
+            thumbnailStyle={refThumbStyle}
+            requiresAuth={true}
+          />
+        )}
+      </div>
+      <button
+        onClick={() => onDelete(r)}
+        title="Delete"
+        style={{
+          position: 'absolute',
+          top: 4,
+          right: 4,
+          background: 'rgba(220,38,38,0.85)',
+          color: '#fff',
+          border: 'none',
+          borderRadius: 4,
+          width: 22,
+          height: 22,
+          cursor: 'pointer',
+          fontSize: 13,
+          lineHeight: '22px',
+          padding: 0,
+        }}
+      >
+        ×
+      </button>
+      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        #{r.id}
+      </div>
+    </div>
   )
 }
